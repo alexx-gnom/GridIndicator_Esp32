@@ -1,131 +1,201 @@
 
 #include <WiFi.h>
-#include <time.h>
 
-const char* WIFI_SSID = "приховано";
-const char* WIFI_PASSWORD = "приховано";
+#include "config.h"
+#include "Settings.h"
+#include "SetupPortal.h"
 
-const char* TZ_INFO = "EET-2EEST,M3.5.0/3,M10.5.0/4";
+SettingsManager settings;
+SetupPortalManager setupPortal;
+DeviceConfig config;
 
-void WiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
-  switch (event) {
-    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-      Serial.println("Connected to access point");
-      break;
+enum class DeviceMode {
+  STARTING,
+  WORKING,
+  SETUP
+};
 
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-      Serial.print("Got IP: ");
-      Serial.println(WiFi.localIP());
-      break;
+DeviceMode mode = DeviceMode::STARTING;
 
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-      Serial.print("Disconnected. Reason code: ");
-      Serial.println(info.wifi_sta_disconnected.reason);
-      break;
+// GPIO8: вбудований LED активний LOW
+constexpr unsigned long BOOT_HOLD_MS = 5000;
+constexpr unsigned long LED_BLINK_MS = 400;
+constexpr unsigned long WIFI_RETRY_MS = 10000;
 
-    default:
-      break;
+unsigned long bootPressStart = 0;
+unsigned long lastLedToggle = 0;
+unsigned long lastWifiAttempt = 0;
+
+bool bootPressTiming = false;
+bool bootLongPressHandled = false;
+bool ledState = false;
+bool wifiAttemptStarted = false;
+
+void ledOn() {
+  digitalWrite(BLUE_LED_PIN, LOW);
+}
+
+void ledOff() {
+  digitalWrite(BLUE_LED_PIN, HIGH);
+}
+
+void updateLedBlink() {
+  if (millis() - lastLedToggle >= LED_BLINK_MS) {
+    lastLedToggle = millis();
+    ledState = !ledState;
+    digitalWrite(BLUE_LED_PIN, ledState ? LOW : HIGH);
   }
+}
+
+// Повертає true лише один раз після утримання BOOT 5 секунд.
+bool checkBootLongPress() {
+  if (digitalRead(SETUP_PIN) == LOW) {
+    if (!bootPressTiming) {
+      bootPressTiming = true;
+      bootPressStart = millis();
+    }
+
+    if (!bootLongPressHandled &&
+        millis() - bootPressStart >= BOOT_HOLD_MS) {
+      bootLongPressHandled = true;
+      return true;
+    }
+  } else {
+    bootPressTiming = false;
+    bootLongPressHandled = false;
+  }
+
+  return false;
+}
+
+void startSetupMode() {
+  Serial.println();
+  Serial.println("=== SETUP MODE ===");
+
+  // Спочатку вимикаємо Wi-Fi станції.
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
+  delay(200);
+
+  mode = DeviceMode::SETUP;
+  ledState = false;
+  lastLedToggle = millis();
+
+  if (!setupPortal.begin()) {
+    Serial.println("ERROR: Setup Portal failed!");
+    // Залишаємо індикацію помилки блиманням.
+    return;
+  }
+
+  Serial.println("Setup mode ready.");
+}
+
+void startWorkingMode() {
+  Serial.println();
+  Serial.println("=== WORKING MODE ===");
+  Serial.print("Object: ");
+  Serial.println(config.objectName);
+  Serial.print("Wi-Fi SSID: ");
+  Serial.println(config.ssid);
+
+  setupPortal.stop();
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
+
+  ledOn();
+  mode = DeviceMode::WORKING;
+
+  Serial.println("Connecting to saved Wi-Fi...");
+  WiFi.begin(config.ssid.c_str(), config.password.c_str());
+
+  lastWifiAttempt = millis();
+  wifiAttemptStarted = true;
 }
 
 void setup() {
   Serial.begin(115200);
-  WiFi.onEvent(WiFiEvent);
-  delay(1000);
-
-  WiFi.mode(WIFI_STA);
-  Serial.print("ESP32 MAC: ");
-  Serial.println(WiFi.macAddress());
-  WiFi.disconnect();
   delay(500);
 
-  Serial.println("\n=== Wi-Fi scan ===");
+  pinMode(BLUE_LED_PIN, OUTPUT);
+  ledOff();
 
-  int count = WiFi.scanNetworks();
+  pinMode(SETUP_PIN, INPUT_PULLUP);
 
-  if (count == 0) {
-    Serial.println("No networks found!");
-  } else {
-    Serial.printf("Found %d networks:\n", count);
+  Serial.println();
+  Serial.println("Grid Indicator starting...");
 
-    for (int i = 0; i < count; i++) {
-      Serial.printf(
-  "%d: %s | RSSI: %d dBm | CH: %d | BSSID: %s\n",
-  i + 1,
-  WiFi.SSID(i).c_str(),
-  WiFi.RSSI(i),
-  WiFi.channel(i),
-  WiFi.BSSIDstr(i).c_str()
-);
-    }
-  }
-
-  WiFi.scanDelete();
-
-  Serial.println("\n=== Connecting ===");
-  uint8_t bssid[] = {0x50, 0xD4, 0xF7, 0x3E, 0x9E, 0x7A};
-
-WiFi.begin(
-  WIFI_SSID,
-  WIFI_PASSWORD//,
- // 1,       // канал роутера
-  //bssid,   // конкретна точка доступу
-  //true
-);
-
-  for (int i = 0; i < 30; i++) {
-    if (WiFi.status() == WL_CONNECTED) {
-      break;
-    }
-
-    Serial.printf("Status: %d\n", WiFi.status());
-    delay(1000);
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nCONNECTED!");
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("RSSI: ");
-    Serial.println(WiFi.RSSI());
-  } else {
-    Serial.println("\nConnection failed.");
-    Serial.printf("Final status: %d\n", WiFi.status());
-  }
-
-   configTzTime(
-    TZ_INFO,
-    "pool.ntp.org",
-    "time.google.com"
-  );
-
-  Serial.println("Waiting for NTP time...");
-
-  struct tm timeInfo;
-  if (!getLocalTime(&timeInfo, 20000)) {
-    Serial.println("NTP synchronization failed!");
+  if (!settings.begin()) {
+    Serial.println("ERROR: Settings initialization failed!");
+    ledOn();
     return;
   }
 
-  Serial.println("NTP synchronized!");
+  // Якщо BOOT затиснутий під час старту, одразу відкриваємо
+  // налаштування. Не потрібно чекати 5 секунд після завантаження.
+  if (digitalRead(SETUP_PIN) == LOW) {
+    startSetupMode();
+    return;
+  }
+
+  if (!settings.loadConfig(config) || config.ssid.isEmpty()) {
+    Serial.println("No saved Wi-Fi configuration.");
+    startSetupMode();
+    return;
+  }
+
+  startWorkingMode();
 }
 
 void loop() {
-  struct tm timeInfo;
+  if (mode == DeviceMode::SETUP) {
+    setupPortal.update();
+    updateLedBlink();
 
-  if (getLocalTime(&timeInfo, 1000)) {
-    Serial.printf(
-      "%04d-%02d-%02d %02d:%02d:%02d\n",
-      timeInfo.tm_year + 1900,
-      timeInfo.tm_mon + 1,
-      timeInfo.tm_mday,
-      timeInfo.tm_hour,
-      timeInfo.tm_min,
-      timeInfo.tm_sec
-    );
-  } else {
-    Serial.println("Time unavailable");
+    if (setupPortal.configurationSaved()) {
+      Serial.println("Configuration saved successfully.");
+      Serial.println("Restarting in 1 second...");
+      delay(1000);
+      ESP.restart();
+    }
+
+    return;
   }
 
-  delay(1000);
+  if (mode != DeviceMode::WORKING) {
+    return;
+  }
+
+  if (checkBootLongPress()) {
+    Serial.println("BOOT held for 5 seconds.");
+    startSetupMode();
+    return;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    ledOff();
+
+    if (wifiAttemptStarted) {
+      wifiAttemptStarted = false;
+      Serial.println("Wi-Fi connected!");
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+    }
+
+    return;
+  }
+
+  // LED світиться, поки Wi-Fi не підключений.
+  ledOn();
+
+  // Повторна спроба підключення, якщо з'єднання не відновилося.
+  if (millis() - lastWifiAttempt >= WIFI_RETRY_MS) {
+    lastWifiAttempt = millis();
+
+    Serial.println("Wi-Fi not connected. Retrying...");
+    WiFi.disconnect();
+    WiFi.begin(config.ssid.c_str(), config.password.c_str());
+    wifiAttemptStarted = true;
+  }
 }
