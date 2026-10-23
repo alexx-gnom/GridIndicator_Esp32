@@ -106,8 +106,6 @@ void sendForm(WiFiClient& client) {
 }
 
 void handleSave(WiFiClient& client, const String& payload) {
-  Serial.println("Handling POST /save");
-
   String ssid = getFormValue(payload, "ssid");
   String password = getFormValue(payload, "password");
   String objectName = getFormValue(payload, "object");
@@ -191,10 +189,6 @@ void handleClient() {
     return;
   }
 
-  Serial.print("HTTP request: [");
-  Serial.print(requestLine);
-  Serial.println("]");
-
   int contentLength = 0;
 
   while (client.connected()) {
@@ -209,9 +203,6 @@ void handleClient() {
       contentLength = line.substring(15).toInt();
     }
   }
-
-  Serial.print("Content-Length: ");
-  Serial.println(contentLength);
 
   // Розбираємо метод і шлях окремо, щоб запит із query string
   // або додатковим слешем не спричиняв хибний 404.
@@ -257,7 +248,6 @@ void handleClient() {
       }
 
       if (payload.length() != static_cast<size_t>(contentLength)) {
-        Serial.println("ERROR: incomplete POST body");
         sendResponse(
           client,
           "<section class='card'><h2>Не вдалося прочитати форму</h2>"
@@ -269,11 +259,6 @@ void handleClient() {
       }
     }
   } else {
-    Serial.print("HTTP 404, method=");
-    Serial.print(method);
-    Serial.print(" path=");
-    Serial.println(path);
-
     sendResponse(
       client,
       "<section class='card'><h2>Сторінку не знайдено</h2>"
@@ -303,45 +288,34 @@ bool SetupPortalManager::begin() {
     return false;
   }
 
+  // Keep the tested radio startup sequence unchanged.
   WiFi.mode(WIFI_AP);
   delay(200);
 
   WiFi.disconnect(true, true);
-WiFi.mode(WIFI_OFF);
-delay(500);
+  WiFi.mode(WIFI_OFF);
+  delay(500);
 
-WiFi.mode(WIFI_AP);
-delay(500);
+  WiFi.mode(WIFI_AP);
+  delay(500);
 
-IPAddress apIP(192, 168, 4, 1);
-IPAddress gateway(192, 168, 4, 1);
-IPAddress subnet(255, 255, 255, 0);
+  IPAddress apIP(192, 168, 4, 1);
+  IPAddress gateway(192, 168, 4, 1);
+  IPAddress subnet(255, 255, 255, 0);
 
-if (!WiFi.softAPConfig(apIP, gateway, subnet)) {
-  Serial.println("AP IP configuration failed!");
-  return false;
-}
+  if (!WiFi.softAPConfig(apIP, gateway, subnet)) {
+    Serial.println("ERROR: AP IP configuration failed.");
+    savedFlag = nullptr;
+    return false;
+  }
 
-Serial.println("Starting SoftAP...");
+  if (!WiFi.softAP(SETUP_AP_SSID, SETUP_AP_PASSWORD, 6, false, 4)) {
+    Serial.println("ERROR: Setup AP start failed.");
+    savedFlag = nullptr;
+    return false;
+  }
 
-if (!WiFi.softAP(SETUP_AP_SSID, SETUP_AP_PASSWORD, 6, false, 4)) {
-  Serial.println("Setup AP start failed!");
-  return false;
-}
-
-delay(500);
-
-Serial.print("AP IP: ");
-Serial.println(WiFi.softAPIP());
-
-Serial.print("AP MAC: ");
-Serial.println(WiFi.softAPmacAddress());
-
-Serial.print("Stations: ");
-Serial.println(WiFi.softAPgetStationNum());
-
-server.begin();
-
+  delay(500);
   server.begin();
   running = true;
 
