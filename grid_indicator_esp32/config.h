@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 #pragma once
 
 constexpr char SETUP_AP_SSID[] = "GnOM_GridIndicator_Setup";
