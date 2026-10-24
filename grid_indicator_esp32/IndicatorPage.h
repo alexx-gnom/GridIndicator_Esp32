@@ -191,7 +191,8 @@ async function loadTelegramChats() {
     const r = await fetch("/api/telegram/chats", {cache:"no-store"});
     if (!r.ok) throw new Error("load");
     const d = await r.json();
-    (d.chats || []).forEach((id, i) => { document.getElementById("chat"+i).value = id || ""; });
+    const input = document.getElementById("chat0");
+    if (input) input.value = (d.chats && d.chats.length ? d.chats[0] : "") || "";
     status.textContent = d.configured ? "Бот готовий" : "Потрібен токен бота в secrets.h";
   } catch (e) { status.textContent = "Не вдалося завантажити"; }
 }
@@ -200,14 +201,29 @@ document.getElementById("saveTelegram").addEventListener("click", async () => {
   const status = document.getElementById("telegramStatus");
   button.disabled = true;
   const params = new URLSearchParams();
-  for (let i=0; i<4; i++) params.set("chat"+i, document.getElementById("chat"+i).value.trim());
+  const input = document.getElementById("chat0");
+  if (!input) {
+    console.error("[TG CFG] Не знайдено поле chat0");
+    status.textContent = "Помилка: поле Chat ID не знайдено";
+    button.disabled = false;
+    return;
+  }
+  const chatId = input.value.trim();
+  console.log("[TG CFG] Надсилаю Chat ID: довжина=" + chatId.length +
+    ", останні символи=" + (chatId ? chatId.slice(-4) : "(порожньо)"));
+  params.set("chat0", chatId);
   try {
     const r = await fetch("/api/telegram/chats", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:params.toString()});
-    const d = await r.json();
+    const responseText = await r.text();
+    console.log("[TG CFG] HTTP " + r.status + "; відповідь=" + responseText);
+    const d = JSON.parse(responseText);
     if (!r.ok || !d.ok) throw new Error("save");
     status.textContent = "Chat ID збережено";
-  } catch(e) { status.textContent = "Помилка збереження"; }
-  finally { button.disabled = false; }
+    await loadTelegramChats();
+  } catch(e) {
+    console.error("[TG CFG] Помилка збереження:", e);
+    status.textContent = "Помилка збереження";
+  } finally { button.disabled = false; }
 });
 let selectedHistoryDate = "";
 function fmtDuration(sec) {

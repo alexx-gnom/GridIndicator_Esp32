@@ -191,9 +191,16 @@ void WebServerManager::update(const String& objectName) {
       }
       return decoded;
     };
-    String ids[4] = {getValue("chat0"),getValue("chat1"),getValue("chat2"),getValue("chat3")};
-    bool ok = contentLength > 0 && requestBody.length() == contentLength &&
-              Telegram::saveChatIds(ids);
+    String ids[4] = {getValue("chat0"), "", "", ""};
+    String incoming = ids[0];
+    Serial.printf("[TG CFG] POST received: body=%u/%u bytes, Chat ID length=%u, suffix=%s\\n",
+      static_cast<unsigned>(requestBody.length()), static_cast<unsigned>(contentLength),
+      static_cast<unsigned>(incoming.length()),
+      incoming.length() ? incoming.substring(incoming.length() > 4 ? incoming.length()-4 : 0).c_str() : "(empty)");
+    bool bodyComplete = contentLength > 0 && requestBody.length() == contentLength;
+    bool ok = bodyComplete && Telegram::saveChatIds(ids);
+    Serial.printf("[TG CFG] Save result: bodyComplete=%s, saved=%s\\n",
+      bodyComplete ? "yes" : "no", ok ? "yes" : "no");
     client.println(ok ? "HTTP/1.1 200 OK" : "HTTP/1.1 400 Bad Request");
     client.println("Content-Type: application/json; charset=utf-8");
     client.println("Cache-Control: no-store");

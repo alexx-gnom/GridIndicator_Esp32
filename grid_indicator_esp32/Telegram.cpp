@@ -189,7 +189,8 @@ void queueDailyReport() {
 
 void begin(const String& objectName) {
   activeObjectName=objectName;
-  prefs.begin("grid_tg", false);
+  bool prefsOk = prefs.begin("grid_tg", false);
+  Serial.printf("[TG CFG] NVS begin: %s\\n", prefsOk ? "OK" : "FAILED");
   for (uint8_t i=0;i<MAX_CHATS;++i) {
     String key="chat"+String(i);
     chatIds[i]=prefs.getString(key.c_str(),"");
@@ -237,11 +238,47 @@ String chatIdsJson() {
   return out;
 }
 bool saveChatIds(const String ids[4]) {
-  for(uint8_t i=0;i<MAX_CHATS;++i) if(ids[i].length()>40) return false;
-  for(uint8_t i=0;i<MAX_CHATS;++i) {
-    chatIds[i]=ids[i]; String key="chat"+String(i);
-    prefs.putString(key.c_str(),chatIds[i]);
+  // Only one recipient is currently supported. Do not depend on the lifetime
+  // of the global Preferences handle used to load settings during startup.
+  const String incoming = ids[0];
+  if (incoming.length() > 40) {
+    Serial.printf("[TG CFG] Rejecting Chat ID: length=%u (max 40).\n",
+      static_cast<unsigned>(incoming.length()));
+    return false;
   }
+
+  Preferences writer;
+  if (!writer.begin("grid_tg", false)) {
+    Serial.println("[TG CFG] ERROR: local NVS writer begin failed.");
+    return false;
+  }
+
+  const size_t written = writer.putString("chat0", incoming);
+  const String verify = writer.getString("chat0", "");
+  const bool match = (verify == incoming);
+
+  Serial.printf("[TG CFG] Local NVS write: written=%u, inputLen=%u, readLen=%u, match=%s\n",
+    static_cast<unsigned>(written),
+    static_cast<unsigned>(incoming.length()),
+    static_cast<unsigned>(verify.length()),
+    match ? "yes" : "no");
+
+  writer.end();
+
+  if (!match || (incoming.length() > 0 && written == 0)) {
+    Serial.println("[TG CFG] ERROR: Chat ID was not persisted; RAM value unchanged.");
+    return false;
+  }
+
+  // Make the new recipient active immediately, without an ESP restart.
+  chatIds[0] = incoming;
+  Serial.printf("[TG CFG] Chat ID updated in RAM: length=%u, suffix=%s\n",
+    static_cast<unsigned>(chatIds[0].length()),
+    chatIds[0].length()
+      ? chatIds[0].substring(chatIds[0].length() > 4 ? chatIds[0].length()-4 : 0).c_str()
+      : "(empty)");
+
+  Serial.println("[TG CFG] Chat ID save completed.");
   return true;
 }
 } // namespace Telegram

@@ -2,6 +2,7 @@
 #include "Clock.h"
 #include <Preferences.h>
 #include <time.h>
+#include <Arduino.h>
 
 namespace History {
 namespace {
@@ -42,8 +43,16 @@ int dayIndex(uint32_t key) {
   return -1;
 }
 void save() {
-  prefs.putBytes("slots", slots, sizeof(slots));
-  prefs.putULong("lastEpoch", (uint32_t)lastEpoch);
+  const size_t expected = sizeof(slots);
+  const size_t writtenSlots = prefs.putBytes("slots", slots, expected);
+  const size_t writtenEpoch = prefs.putULong("lastEpoch", (uint32_t)lastEpoch);
+  const size_t storedLength = prefs.getBytesLength("slots");
+  Serial.printf("[HIST NVS] save: expected=%u, writtenSlots=%u, storedLength=%u, epochBytes=%u\\n",
+    static_cast<unsigned>(expected), static_cast<unsigned>(writtenSlots),
+    static_cast<unsigned>(storedLength), static_cast<unsigned>(writtenEpoch));
+  if (writtenSlots != expected || storedLength != expected || writtenEpoch == 0) {
+    Serial.println("[HIST NVS] ERROR: one or more NVS writes failed.");
+  }
   lastSaveMs = millis();
 }
 void ensureSlot(uint32_t date, uint8_t q) {
@@ -65,13 +74,22 @@ String slotJson(const Slot& s) {
 } // namespace
 
 void begin() {
-  prefs.begin("grid_history", false);
+  bool ok = prefs.begin("grid_history", false);
+  size_t storedLength = ok ? prefs.getBytesLength("slots") : 0;
+  Serial.printf("[HIST NVS] begin=%s, slotsSize=%u, storedLength=%u\\n",
+    ok ? "OK" : "FAILED", static_cast<unsigned>(sizeof(slots)),
+    static_cast<unsigned>(storedLength));
   memset(slots, 0, sizeof(slots));
-  if (prefs.getBytesLength("slots") == sizeof(slots)) prefs.getBytes("slots", slots, sizeof(slots));
-  lastEpoch = (time_t)prefs.getULong("lastEpoch", 0);
+  if (ok && storedLength == sizeof(slots)) {
+    size_t read = prefs.getBytes("slots", slots, sizeof(slots));
+    Serial.printf("[HIST NVS] load slots: read=%u\\n", static_cast<unsigned>(read));
+  } else if (ok && storedLength != 0) {
+    Serial.println("[HIST NVS] Stored slots length differs from current structure; starting empty.");
+  }
+  lastEpoch = ok ? (time_t)prefs.getULong("lastEpoch", 0) : 0;
   lastTickMs = millis();
   lastSaveMs = millis();
-  initialized = true;
+  initialized = ok;
 }
 
 void update(bool powerPresent) {
