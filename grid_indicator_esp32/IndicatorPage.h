@@ -80,6 +80,134 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
     .history-help { color:var(--muted); font-size:11px; margin-top:10px; }
     .note { margin: 20px 0 0; color: var(--muted); font-size: 13px; }
     .footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
+    /* Steampunk power indicator: CSS/SVG only, no image assets or libraries. */
+    :root {
+      --brass: #b98543;
+      --brass-light: #e7bd73;
+      --copper: #8e512f;
+      --coal: #17130f;
+      --lamp-glow: #ffb83f;
+    }
+    .steam-panel {
+      position:relative; display:grid; grid-template-columns: minmax(100px, 142px) 1fr;
+      gap:16px; align-items:center; margin-top:12px; padding:16px;
+      border:1px solid #936a3b; border-radius:14px; overflow:hidden;
+      background: radial-gradient(ellipse at 25% 45%, #50321c 0%, #241b14 36%, #13151a 78%);
+      box-shadow: inset 0 0 0 3px #4b3826, inset 0 0 22px #000b, 0 8px 20px #0005;
+    }
+    .steam-panel:before { content:""; position:absolute; inset:5px; border:1px solid #b9854355; border-radius:10px; pointer-events:none; }
+    .steam-lamp-wrap { position:relative; width:100%; max-width:142px; aspect-ratio:1; display:grid; place-items:center; }
+    .steam-lamp-glow { position:absolute; inset:8%; border-radius:50%; background:radial-gradient(circle,#ffcb5c55 0%,#ff9d2430 35%,transparent 72%); opacity:0; transition:opacity .8s ease; }
+    .steam-lamp { width:100%; height:100%; overflow:visible; filter:drop-shadow(0 0 2px #000); }
+    .steam-glass { fill:#4b3827; fill-opacity:.45; stroke:#b98543; stroke-width:2.4; transition:fill .7s, fill-opacity .7s, stroke .7s; }
+    .steam-filament { fill:none; stroke:#8f7049; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; transition:stroke .7s, filter .7s; }
+    .steam-base { fill:#4c3824; stroke:#b98543; stroke-width:2; }
+    .steam-gear { transform-box:fill-box; transform-origin:center; fill:#62452a; stroke:#c08a45; stroke-width:2; }
+    .steam-gear-inner { fill:#201810; stroke:#d4a35d; stroke-width:2; }
+    .steam-copy { min-width:0; position:relative; z-index:1; }
+    .steam-kicker { color:#c99b5c; font-size:11px; letter-spacing:1.8px; text-transform:uppercase; }
+    .steam-state { margin:3px 0 5px; color:#e8c27f; font-size:clamp(19px,4.8vw,29px); line-height:1.12; font-weight:800; letter-spacing:.5px; text-shadow:0 2px 10px #000; }
+    .steam-detail { color:#b6a18a; font-size:12px; }
+    .steam-status-lamp { display:inline-block; width:9px; height:9px; margin-right:6px; border-radius:50%; background:#7b8a79; box-shadow:0 0 0 3px #ffffff0b; vertical-align:1px; }
+    .steam-gear-box { display:flex; align-items:center; gap:6px; margin-top:12px; color:#b68a50; font-size:10px; letter-spacing:.7px; }
+    .steam-gear-mini { width:24px; height:24px; animation:steamTurn 18s linear infinite; }
+    .steam-gear-mini path { fill:#64472a; stroke:#bd8846; stroke-width:2; }
+    .steam-gear-mini circle { fill:#21170f; stroke:#bd8846; stroke-width:2; }
+    .steam-panel.power-on .steam-lamp-glow { opacity:1; animation:lampBreath 4s ease-in-out infinite; }
+    .steam-panel.power-on .steam-glass { fill:#ffbd4d; fill-opacity:.24; stroke:#f0bc63; }
+    .steam-panel.power-on .steam-filament { stroke:#fff0a1; filter:drop-shadow(0 0 4px #ff9d24) drop-shadow(0 0 9px #ff9d24); }
+    .steam-panel.power-on .steam-status-lamp { background:#8be5a9; box-shadow:0 0 10px #5ee58a; }
+    .steam-panel.power-off .steam-glass { fill:#251d17; fill-opacity:.5; stroke:#8c6440; }
+    .steam-panel.power-off .steam-filament { stroke:#6e4930; filter:none; }
+    .steam-panel.power-off .steam-status-lamp { background:#e17a50; box-shadow:0 0 8px #d95a35; }
+    .steam-panel.power-off .steam-state { color:#e29a69; }
+    @keyframes lampBreath { 0%,100% { opacity:.72; } 50% { opacity:1; } }
+    @keyframes steamTurn { to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .steam-gear-mini, .steam-panel.power-on .steam-lamp-glow { animation:none; }
+      .steam-glass, .steam-filament, .steam-lamp-glow { transition:none; }
+    }
+    /* Unified steampunk skin for the existing UI components. */
+    :root {
+      color-scheme: dark;
+      --bg: #100e0c;
+      --panel: #201912;
+      --field: #17130f;
+      --border: #79532f;
+      --text: #f2dfbd;
+      --muted: #b49a78;
+      --accent: #d9a354;
+      --ok: #8de5a8;
+    }
+    body {
+      background:
+        radial-gradient(ellipse at 50% -10%, #4c321d 0, transparent 45%),
+        repeating-linear-gradient(135deg, #100e0c 0, #100e0c 8px, #14100c 8px, #14100c 16px);
+      color:var(--text);
+    }
+    .container { max-width: 620px; }
+    .card {
+      background:linear-gradient(145deg,#292117,#1b1712 60%,#171719);
+      border:1px solid #92663a;
+      border-radius:17px;
+      box-shadow:inset 0 0 0 3px #342619, inset 0 0 0 4px #6b492b55, 0 14px 34px #0009;
+      position:relative;
+    }
+    h1 {
+      color:#e9bd77;
+      text-shadow:0 2px 0 #4b2d17,0 0 15px #d18a3840;
+      letter-spacing:.2px;
+    }
+    .subtitle { color:#b99a70; }
+    .clock-card, .history-card {
+      background:linear-gradient(145deg,#251d14,#171513);
+      border:1px solid #81572f;
+      border-radius:13px;
+      box-shadow:inset 0 0 0 2px #382819, inset 0 0 0 3px #8b633333, 0 5px 14px #0005;
+    }
+    .clock-title, .history-head > strong { color:#e7bd79; letter-spacing:.25px; }
+    .actual, .clock-meta, .metric-label, .history-help, .timeline-label, .hours, .legend { color:#b6a080; }
+    .clock-time { color:#ffdc9a; text-shadow:0 0 12px #d48a3650; }
+    .metric, .history-stat {
+      background:linear-gradient(145deg,#211a13,#151413);
+      border:1px solid #76502d;
+      border-radius:10px;
+      box-shadow:inset 0 0 0 2px #302216, inset 0 0 0 3px #9b6d3a22;
+    }
+    .metric-value, .history-stat-value { color:#f0d7a8; }
+    .tg-input {
+      background:#100e0c;
+      border:1px solid #9b7143;
+      color:#f6dfb7;
+      box-shadow:inset 0 2px 7px #0009;
+    }
+    .tg-input:focus { outline:2px solid #c8944e; outline-offset:1px; }
+    .tg-save, .history-nav button {
+      color:#f4d7a2;
+      background:linear-gradient(#654526,#3b2818);
+      border:1px solid #b27d3e;
+      box-shadow:inset 0 1px #f5d39a44,0 2px 4px #0007;
+      cursor:pointer;
+    }
+    .tg-save:hover, .history-nav button:hover { background:linear-gradient(#80592f,#4a301b); }
+    button:disabled { opacity:.35; cursor:not-allowed; }
+    .history-date { color:#e8c486; }
+    .timeline-scroll { scrollbar-color:#a47a45 #20170f; }
+    .slots { background:#392a1c; border:1px solid #6e4a2b; padding:2px; gap:2px; height:29px; }
+    .slot { background:#655642; border-radius:1px; }
+    .slot.power { background:linear-gradient(#68b77e,#287044); box-shadow:inset 0 0 0 1px #a1d18b55; }
+    .slot.outage { background:linear-gradient(#edb15a,#a94d2d); box-shadow:inset 0 0 0 1px #ffe0a044; }
+    .slot.hour-start { border-left:2px solid #e6c58d; }
+    .hours span { border-left-color:#8d6a42; }
+    .legend i { box-shadow:0 0 0 1px #d8b27433; }
+    .history-stat-label { color:#b69b75; }
+    .footer { color:#a88a65; }
+    @media (max-width: 460px) {
+      .steam-panel { grid-template-columns: minmax(84px, 112px) 1fr; gap:10px; padding:12px; }
+      .steam-kicker { letter-spacing:1px; font-size:9px; }
+      .steam-detail { font-size:11px; }
+      .steam-gear-box { font-size:8px; }
+    }
     @media (max-width: 380px) { .card { padding: 18px; } .grid { grid-template-columns: 1fr; } .history-stats { grid-template-columns:1fr; } }
   </style>
 </head>
@@ -95,7 +223,33 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
         <div class="clock-meta">NTP: <span id="ntpStatus">перевірка…</span> · Uptime: <span id="uptime">—</span></div>
         <div class="clock-meta">Остання відповідь ESP: <span id="lastResponse">—</span></div>
       </div>
-      <div id="connectionStatus" class="status"><span id="statusDot" class="dot"></span><div><div id="statusTitle" class="status-title">Перевірка стану…</div></div></div>
+      <section id="steamPanel" class="steam-panel" aria-live="polite">
+        <div class="steam-lamp-wrap">
+          <div class="steam-lamp-glow"></div>
+          <svg class="steam-lamp" viewBox="0 0 120 120" role="img" aria-label="Індикатор електропостачання">
+            <path class="steam-glass" d="M42 13 C25 18 18 34 22 50 C25 63 37 71 40 81 L40 88 L80 88 L80 81 C83 71 95 63 98 50 C102 34 95 18 78 13 C67 9 53 9 42 13Z"/>
+            <path class="steam-filament" d="M43 30 L49 59 L60 34 L71 59 L77 30 M49 59 L49 70 M71 59 L71 70 M49 70 Q60 78 71 70"/>
+            <path class="steam-base" d="M41 87 H79 V96 H41Z M44 98 H76 V103 H44Z M48 105 H72 V110 H48Z"/>
+            <path d="M48 91H72 M48 100H72" stroke="#d0a15d" stroke-width="1.5"/>
+          </svg>
+          <svg class="steam-gear-mini" viewBox="0 0 40 40" aria-hidden="true" style="position:absolute;right:0;bottom:3px">
+            <path d="M16 1H24L26 6L31 8L36 6L40 13L36 17L36 23L40 27L36 34L31 32L26 34L24 39H16L14 34L9 32L4 34L0 27L4 23V17L0 13L4 6L9 8L14 6Z"/>
+            <circle cx="20" cy="20" r="8"/>
+          </svg>
+        </div>
+        <div class="steam-copy">
+          <div class="steam-kicker">Енергетичний контур</div>
+          <div id="steamState" class="steam-state">ПЕРЕВІРКА…</div>
+          <div class="steam-detail"><span id="steamStatusLamp" class="steam-status-lamp"></span><span id="steamDetail">Очікування даних від ESP</span></div>
+          <div class="steam-gear-box">
+            <svg class="steam-gear-mini" viewBox="0 0 40 40" aria-hidden="true">
+              <path d="M16 1H24L26 6L31 8L36 6L40 13L36 17L36 23L40 27L36 34L31 32L26 34L24 39H16L14 34L9 32L4 34L0 27L4 23V17L0 13L4 6L9 8L14 6Z"/>
+              <circle cx="20" cy="20" r="8"/>
+            </svg>
+            МЕХАНІЗМ МОНІТОРИНГУ
+          </div>
+        </div>
+      </section>
       <div class="grid">
         <div class="metric"><div class="metric-label">Об'єкт</div><div class="metric-value" id="objectName">—</div></div>
         <div class="metric"><div class="metric-label">Wi-Fi мережа</div><div class="metric-value" id="wifiSsid">—</div></div>
@@ -142,7 +296,7 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
 
 static const char INDICATOR_PAGE_END[] = R"HTML(
     </section>
-    <p class="footer">ESP: <span id="connection">підключення…</span> · Grid Indicator · ESP32-C3</p>
+    <p class="footer">ESP: <span id="connection">підключення…</span> · -=GnOM=-© Grid Indicator · ESP32-C3</p>
   </main>
 <script>
 let lastSuccessfulResponse = 0;
@@ -174,10 +328,11 @@ async function updateStatus() {
     document.getElementById("wifiSsid").textContent = d.ssid || "—";
     document.getElementById("ipAddress").textContent = d.ip || "—";
     document.getElementById("wifiRssi").textContent = d.rssi + " dBm · " + d.wifiQuality;
-    document.getElementById("statusTitle").textContent = d.powerPresent ? "Мережа є" : "Немає мережі";
-    document.getElementById("statusDot").style.background = d.powerPresent ? "var(--ok)" : "#ff7676";
-    document.getElementById("connectionStatus").style.borderColor = d.powerPresent ? "#73d69a44" : "#ff767644";
-    document.getElementById("connectionStatus").style.background = d.powerPresent ? "#73d69a0d" : "#ff76760d";
+    const steamPanel = document.getElementById("steamPanel");
+    steamPanel.classList.toggle("power-on", !!d.powerPresent);
+    steamPanel.classList.toggle("power-off", !d.powerPresent);
+    document.getElementById("steamState").textContent = d.powerPresent ? "МЕРЕЖА Є" : "НЕМАЄ СВІТЛА";
+    document.getElementById("steamDetail").textContent = d.powerPresent ? "Лампа працює · контур під напругою" : "Лампа згасла · очікування мережі";
     document.getElementById("lastEvent").textContent = d.lastEvent || "Подій після запуску немає";
     document.getElementById("connection").textContent = "ONLINE";
     updateLastResponse();
