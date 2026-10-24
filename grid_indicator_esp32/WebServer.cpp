@@ -1,5 +1,7 @@
 #include "WebServer.h"
 #include "IndicatorPage.h"
+#include "Clock.h"
+#include "PowerMonitor.h"
 
 #include <WiFi.h>
 
@@ -14,7 +16,7 @@ String escapeHtml(const String& value) {
       case '&': out += "&amp;"; break;
       case '<': out += "&lt;"; break;
       case '>': out += "&gt;"; break;
-      case '"': out += "&quot;"; break;
+      case '\"': out += "&quot;"; break;
       case '\'': out += "&#39;"; break;
       default: out += value[i]; break;
     }
@@ -29,41 +31,84 @@ String wifiQuality(int rssi) {
   return "Слабкий";
 }
 
-void sendPage(WiFiClient& client, const String& objectName) {
-  String body;
-  body.reserve(900);
-  body += "<div class='status'><span class='dot'></span><div>"
-          "<div class='status-title'>Wi-Fi підключено</div>"
-          "<div class='status-detail'>Пристрій працює в локальній мережі</div>"
-          "</div></div><div class='grid'>";
+String jsonEscape(const String& value) {
+  String out;
+  out.reserve(value.length() + 8);
+  for (size_t i = 0; i < value.length(); ++i) {
+    char c = value[i];
+    if (c == '"' || c == '\\') { out += '\\'; out += c; }
+    else if (c == '\n') out += "\\n";
+    else if (c == '\r') out += "\\r";
+    else if ((uint8_t)c >= 0x20) out += c;
+  }
+  return out;
+}
 
-  body += "<div class='metric'><div class='metric-label'>Об'єкт</div><div class='metric-value'>";
-  body += escapeHtml(objectName.length() ? objectName : String("Не задано"));
-  body += "</div></div>";
+String clockStatusText() {
+  switch (Clock::status()) {
+    case Clock::SyncStatus::NOT_STARTED: return "не запущено";
+    case Clock::SyncStatus::WAITING_FOR_WIFI: return "очікування Wi-Fi";
+    case Clock::SyncStatus::SYNCING: return "синхронізація NTP";
+    case Clock::SyncStatus::SYNCED: return "OK";
+    case Clock::SyncStatus::ERROR: return "помилка NTP; повторна спроба";
+  }
+  return "невідомо";
+}
 
-  body += "<div class='metric'><div class='metric-label'>Wi-Fi мережа</div><div class='metric-value'>";
-  body += escapeHtml(WiFi.SSID());
-  body += "</div></div>";
+String eventDescription() {
+  if (!PowerMonitor::hasLastEvent()) return "";
+  const PowerMonitor::Event e = PowerMonitor::lastEvent();
+  String result = e.type == PowerMonitor::EventType::POWER_LOST
+      ? "Зникнення живлення" : "Відновлення живлення";
+  if (e.timestamp != 0) {
+    time_t t = e.timestamp;
+    struct tm localInfo;
+    if (localtime_r(&t, &localInfo) != nullptr) {
+      char buffer[20];
+      if (strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localInfo) > 0) {
+        result += " · ";
+        result += buffer;
+      }
+    }
+  } else {
+    result += " · час недоступний";
+  }
+  return result;
+}
 
-  body += "<div class='metric'><div class='metric-label'>IP-адреса</div><div class='metric-value'>";
-  body += WiFi.localIP().toString();
-  body += "</div></div>";
-
+void sendJsonStatus(WiFiClient& client, const String& objectName) {
+  const bool timeValid = Clock::isTimeValid();
   const int rssi = WiFi.RSSI();
-  body += "<div class='metric'><div class='metric-label'>Рівень сигналу</div><div class='metric-value'>";
-  body += String(rssi);
-  body += " dBm · ";
-  body += wifiQuality(rssi);
-  body += "</div></div></div>";
-  body += "<p class='note'>Моніторинг живлення та історію відключень буде додано на наступному етапі.</p>";
+  String body;
+  body.reserve(600);
+  body = "{\"clockValid\":" + String(timeValid ? "true" : "false");
+  body += ",\"clock\":\"" + jsonEscape(timeValid ? Clock::dateTime() : String("")) + "\"";
+  body += ",\"clockStatus\":\"" + jsonEscape(clockStatusText()) + "\"";
+  body += ",\"uptimeMs\":" + String(millis());
+  body += ",\"powerPresent\":" + String(PowerMonitor::hasMainsPower() ? "true" : "false");
+  body += ",\"rawHigh\":" + String(PowerMonitor::rawSignalHigh() ? "true" : "false");
+  body += ",\"objectName\":\"" + jsonEscape(objectName) + "\"";
+  body += ",\"ssid\":\"" + jsonEscape(WiFi.SSID()) + "\"";
+  body += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
+  body += ",\"rssi\":" + String(rssi);
+  body += ",\"wifiQuality\":\"" + wifiQuality(rssi) + "\"";
+  body += ",\"lastEvent\":\"" + jsonEscape(eventDescription()) + "\"}";
 
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: application/json; charset=utf-8");
+  client.println("Cache-Control: no-store");
+  client.println("Connection: close");
+  client.println();
+  client.print(body);
+}
+
+void sendPage(WiFiClient& client) {
   client.println("HTTP/1.1 200 OK");
   client.println("Content-Type: text/html; charset=utf-8");
   client.println("Cache-Control: no-store");
   client.println("Connection: close");
   client.println();
   client.print(INDICATOR_PAGE_START);
-  client.print(body);
   client.print(INDICATOR_PAGE_END);
 }
 }
@@ -84,30 +129,23 @@ void WebServerManager::update(const String& objectName) {
 
   WiFiClient client = server.available();
   if (!client) return;
-
   client.setTimeout(1000);
   const unsigned long started = millis();
-  while (client.connected() && !client.available() && millis() - started < 1000) {
-    delay(1);
-  }
-
-  if (!client.available()) {
-    client.stop();
-    return;
-  }
+  while (client.connected() && !client.available() && millis() - started < 1000) delay(1);
+  if (!client.available()) { client.stop(); return; }
 
   String requestLine = client.readStringUntil('\n');
   requestLine.trim();
-
-  // Прочитати заголовки, щоб перейти до обробки запиту.
   while (client.connected()) {
     String line = client.readStringUntil('\n');
     line.trim();
     if (line.length() == 0) break;
   }
 
-  if (requestLine.startsWith("GET / ") || requestLine.startsWith("GET /?")) {
-    sendPage(client, objectName);
+  if (requestLine.startsWith("GET /api/status ")) {
+    sendJsonStatus(client, objectName);
+  } else if (requestLine.startsWith("GET / ") || requestLine.startsWith("GET /?")) {
+    sendPage(client);
   } else {
     client.println("HTTP/1.1 404 Not Found");
     client.println("Content-Type: text/plain; charset=utf-8");
@@ -115,7 +153,6 @@ void WebServerManager::update(const String& objectName) {
     client.println();
     client.println("Not found");
   }
-
   delay(1);
   client.stop();
 }
@@ -126,6 +163,4 @@ void WebServerManager::stop() {
   running = false;
 }
 
-bool WebServerManager::isRunning() const {
-  return running;
-}
+bool WebServerManager::isRunning() const { return running; }

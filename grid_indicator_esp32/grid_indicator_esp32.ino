@@ -4,6 +4,7 @@
 #include "config.h"
 #include "Settings.h"
 #include "Clock.h"
+#include "PowerMonitor.h"
 #include "SetupPortal.h"
 #include "WebServer.h"
 
@@ -153,11 +154,12 @@ void setup() {
   startWorkingMode();
 
   Clock::begin();
+  PowerMonitor::begin();
 }
 
 void loop() {
 
-  Clock::update();
+  
 
   static uint32_t lastClockPrint = 0;
 
@@ -186,6 +188,8 @@ if (Clock::isTimeValid() &&
   if (mode != DeviceMode::WORKING) {
     return;
   }
+
+  PowerMonitor::update();
 
   if (checkBootLongPress()) {
     Serial.println("BOOT held for 5 seconds.");
@@ -223,4 +227,5 @@ if (Clock::isTimeValid() &&
     WiFi.begin(config.ssid.c_str(), config.password.c_str());
     wifiAttemptStarted = true;
   }
+
 }
