@@ -5,6 +5,7 @@
 #include "Clock.h"
 #include "PowerMonitor.h"
 #include "History.h"
+#include "Telegram.h"
 #include "SetupPortal.h"
 #include "WebServer.h"
 #include "WifiManager.h"
@@ -70,6 +71,7 @@ void setup() {
   Clock::begin();
   PowerMonitor::begin();
   History::begin();
+  Telegram::begin(config.objectName);
 }
 
 void loop() {
@@ -89,6 +91,15 @@ void loop() {
 
   PowerMonitor::update();
   History::update(PowerMonitor::hasMainsPower());
+
+  PowerMonitor::Event powerEvent;
+  if (PowerMonitor::takeEvent(powerEvent)) {
+    Telegram::onPowerEvent(
+      powerEvent.type == PowerMonitor::EventType::POWER_RESTORED,
+      powerEvent.timestamp
+    );
+  }
+  Telegram::update(config.objectName);
 
   if (ButtonManager::takeSetupRequest()) {
     startSetupMode();

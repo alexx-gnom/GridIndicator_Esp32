@@ -51,6 +51,9 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
     .metric { min-width: 0; padding: 14px; border-radius: 12px; background: var(--field); border: 1px solid var(--border); }
     .metric-label { color: var(--muted); font-size: 13px; }
     .metric-value { margin-top: 5px; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+    .tg-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+    .tg-input { min-width:0; width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--field); color:var(--text); font:inherit; }
+    .tg-save { margin-top:10px; border:1px solid var(--border); border-radius:8px; padding:9px 12px; background:#303846; color:var(--text); font:inherit; cursor:pointer; }
     .history-card { margin-top: 12px; padding: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
     .history-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
     .history-nav { display:flex; align-items:center; gap:8px; }
@@ -100,6 +103,14 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
         <div class="metric"><div class="metric-label">Рівень сигналу</div><div class="metric-value" id="wifiRssi">—</div></div>
         <div class="metric"><div class="metric-label">Остання подія</div><div class="metric-value" id="lastEvent">—</div></div>
       </div>
+      <section class="history-card">
+        <div class="history-head"><strong>Telegram</strong><span id="telegramStatus" class="actual">Завантаження…</span></div>
+        <p class="history-help">Вкажи Chat ID отримувача. Для кількох людей можна використати групу Telegram.</p>
+        <div class="tg-grid">
+          <input id="chat0" class="tg-input" inputmode="numeric" maxlength="40" placeholder="Chat ID">
+        </div>
+        <button id="saveTelegram" class="tg-save" type="button">Зберегти Chat ID</button>
+      </section>
       <section class="history-card">
         <div class="history-head">
           <strong>Історія електропостачання</strong>
@@ -174,6 +185,30 @@ async function updateStatus() {
     document.getElementById("connection").textContent = "OFFLINE";
   }
 }
+async function loadTelegramChats() {
+  const status = document.getElementById("telegramStatus");
+  try {
+    const r = await fetch("/api/telegram/chats", {cache:"no-store"});
+    if (!r.ok) throw new Error("load");
+    const d = await r.json();
+    (d.chats || []).forEach((id, i) => { document.getElementById("chat"+i).value = id || ""; });
+    status.textContent = d.configured ? "Бот готовий" : "Потрібен токен бота в secrets.h";
+  } catch (e) { status.textContent = "Не вдалося завантажити"; }
+}
+document.getElementById("saveTelegram").addEventListener("click", async () => {
+  const button = document.getElementById("saveTelegram");
+  const status = document.getElementById("telegramStatus");
+  button.disabled = true;
+  const params = new URLSearchParams();
+  for (let i=0; i<4; i++) params.set("chat"+i, document.getElementById("chat"+i).value.trim());
+  try {
+    const r = await fetch("/api/telegram/chats", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:params.toString()});
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error("save");
+    status.textContent = "Chat ID збережено";
+  } catch(e) { status.textContent = "Помилка збереження"; }
+  finally { button.disabled = false; }
+});
 let selectedHistoryDate = "";
 function fmtDuration(sec) {
   sec = Math.max(0, Number(sec) || 0);
@@ -221,6 +256,7 @@ document.getElementById("historyPrev").addEventListener("click", () => { selecte
 document.getElementById("historyNext").addEventListener("click", () => { selectedHistoryDate = dateShift(selectedHistoryDate, 1); updateHistory(); });
 setInterval(updateHistory, 10000);
 updateHistory();
+loadTelegramChats();
 setInterval(updateStatus, 1000);
 setInterval(updateLastResponse, 1000);
 updateStatus();

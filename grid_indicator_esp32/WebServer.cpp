@@ -3,9 +3,10 @@
 #include "Clock.h"
 #include "PowerMonitor.h"
 #include "History.h"
-#include "History.h"
+#include "Telegram.h"
 
 #include <WiFi.h>
+#include <stdlib.h>
 
 namespace {
 WiFiServer server(80);
@@ -138,14 +139,67 @@ void WebServerManager::update(const String& objectName) {
 
   String requestLine = client.readStringUntil('\n');
   requestLine.trim();
+  int contentLength = 0;
   while (client.connected()) {
     String line = client.readStringUntil('\n');
     line.trim();
     if (line.length() == 0) break;
+    if (line.startsWith("Content-Length:")) contentLength = line.substring(15).toInt();
+  }
+  String requestBody;
+  if (requestLine.startsWith("POST ") && contentLength > 0 && contentLength <= 512) {
+    uint32_t bodyStarted = millis();
+    while (requestBody.length() < contentLength && client.connected() &&
+           millis() - bodyStarted < 1000) {
+      while (client.available() && requestBody.length() < contentLength) {
+        requestBody += (char)client.read();
+      }
+      delay(1);
+    }
   }
 
   if (requestLine.startsWith("GET /api/status ")) {
     sendJsonStatus(client, objectName);
+  } else if (requestLine.startsWith("GET /api/telegram/chats ")) {
+    String body = Telegram::chatIdsJson();
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: application/json; charset=utf-8");
+    client.println("Cache-Control: no-store");
+    client.println("Connection: close");
+    client.println();
+    client.print(body);
+  } else if (requestLine.startsWith("POST /api/telegram/chats ")) {
+    auto getValue = [&requestBody](const String& key) -> String {
+      String needle = key + "=";
+      int start = requestBody.indexOf(needle);
+      if (start < 0) return "";
+      if (start > 0 && requestBody[start - 1] != '&') return "";
+      start += needle.length();
+      int end = requestBody.indexOf('&', start);
+      if (end < 0) end = requestBody.length();
+      String value = requestBody.substring(start, end);
+      value.replace("+", " ");
+      String decoded;
+      for (int i=0; i<(int)value.length(); ++i) {
+        if (value[i]=='%' && i+2<(int)value.length()) {
+          char hex[3]={value[i+1],value[i+2],0};
+          char* endPtr=nullptr;
+          long ch=strtol(hex,&endPtr,16);
+          if (endPtr && *endPtr==0) { decoded+=(char)ch; i+=2; continue; }
+        }
+        decoded+=value[i];
+      }
+      return decoded;
+    };
+    String ids[4] = {getValue("chat0"),getValue("chat1"),getValue("chat2"),getValue("chat3")};
+    bool ok = contentLength > 0 && requestBody.length() == contentLength &&
+              Telegram::saveChatIds(ids);
+    client.println(ok ? "HTTP/1.1 200 OK" : "HTTP/1.1 400 Bad Request");
+    client.println("Content-Type: application/json; charset=utf-8");
+    client.println("Cache-Control: no-store");
+    client.println("Connection: close");
+    client.println();
+    client.print(ok ? "{\"ok\":true}" : "{\"ok\":false}");
   } else if (requestLine.startsWith("GET /api/history ")) {
     String dateText;
     int q = requestLine.indexOf("date=");
