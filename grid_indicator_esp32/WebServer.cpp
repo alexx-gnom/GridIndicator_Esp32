@@ -2,6 +2,8 @@
 #include "IndicatorPage.h"
 #include "Clock.h"
 #include "PowerMonitor.h"
+#include "History.h"
+#include "History.h"
 
 #include <WiFi.h>
 
@@ -144,6 +146,24 @@ void WebServerManager::update(const String& objectName) {
 
   if (requestLine.startsWith("GET /api/status ")) {
     sendJsonStatus(client, objectName);
+  } else if (requestLine.startsWith("GET /api/history ")) {
+    String dateText;
+    int q = requestLine.indexOf("date=");
+    if (q >= 0) {
+      int start = q + 5;
+      int end = requestLine.indexOf(' ', start);
+      if (end < 0) end = requestLine.length();
+      dateText = requestLine.substring(start, end);
+      int amp = dateText.indexOf('&');
+      if (amp >= 0) dateText = dateText.substring(0, amp);
+    }
+    String body = History::dayJson(dateText);
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: application/json; charset=utf-8");
+    client.println("Cache-Control: no-store");
+    client.println("Connection: close");
+    client.println();
+    client.print(body);
   } else if (requestLine.startsWith("GET / ") || requestLine.startsWith("GET /?")) {
     sendPage(client);
   } else {

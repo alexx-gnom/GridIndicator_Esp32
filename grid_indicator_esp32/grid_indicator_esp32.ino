@@ -4,6 +4,7 @@
 #include "Settings.h"
 #include "Clock.h"
 #include "PowerMonitor.h"
+#include "History.h"
 #include "SetupPortal.h"
 #include "WebServer.h"
 #include "WifiManager.h"
@@ -68,6 +69,7 @@ void setup() {
   startWorkingMode();
   Clock::begin();
   PowerMonitor::begin();
+  History::begin();
 }
 
 void loop() {
@@ -86,6 +88,7 @@ void loop() {
   if (mode != DeviceMode::WORKING) return;
 
   PowerMonitor::update();
+  History::update(PowerMonitor::hasMainsPower());
 
   if (ButtonManager::takeSetupRequest()) {
     startSetupMode();

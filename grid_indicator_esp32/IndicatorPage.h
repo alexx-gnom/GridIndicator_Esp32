@@ -51,16 +51,39 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
     .metric { min-width: 0; padding: 14px; border-radius: 12px; background: var(--field); border: 1px solid var(--border); }
     .metric-label { color: var(--muted); font-size: 13px; }
     .metric-value { margin-top: 5px; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+    .history-card { margin-top: 12px; padding: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+    .history-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .history-nav { display:flex; align-items:center; gap:8px; }
+    .history-nav button { background:#303846; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; }
+    .history-date { font-weight:700; min-width:120px; text-align:center; }
+    .timeline-scroll { overflow-x:auto; margin-top:18px; padding-bottom:4px; }
+    .timeline { min-width:540px; }
+    .hours { display:grid; grid-template-columns:repeat(24,minmax(0,1fr)); margin-left:42px; color:var(--muted); font-size:10px; }
+    .hours span { border-left:1px solid #536071; padding-left:2px; }
+    .timeline-row { display:grid; grid-template-columns:38px minmax(0,1fr); gap:4px; align-items:center; margin-top:5px; }
+    .timeline-label { font-size:11px; color:var(--muted); }
+    .slots { display:grid; grid-template-columns:repeat(96,minmax(0,1fr)); gap:1px; height:25px; background:#303846; }
+    .slot { min-width:0; background:#64748b; }
+    .slot.power { background:#2b8a61; }
+    .slot.outage { background:#e5a23b; }
+    .slot.hour-start { border-left:2px solid #edf1f7; }
+    .legend { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:11px; color:var(--muted); }
+    .legend span { display:flex; align-items:center; gap:5px; }
+    .legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
+    .history-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:16px; }
+    .history-stat { background:var(--field); border:1px solid var(--border); border-radius:10px; padding:10px; min-width:0; }
+    .history-stat-label { font-size:11px; color:var(--muted); }
+    .history-stat-value { font-size:15px; font-weight:700; margin-top:4px; }
+    .history-help { color:var(--muted); font-size:11px; margin-top:10px; }
     .note { margin: 20px 0 0; color: var(--muted); font-size: 13px; }
     .footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
-    @media (max-width: 380px) { .card { padding: 18px; } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 380px) { .card { padding: 18px; } .grid { grid-template-columns: 1fr; } .history-stats { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
   <main class="container">
     <section class="card">
       <h1>Grid Indicator</h1>
-      <p class="subtitle">Стан пристрою</p>
       <div class="clock-card">
         <div class="clock-row">
           <div class="clock-info"><strong class="clock-title">Годинник ESP · Київ</strong><span id="clockDate" class="actual">Очікування NTP…</span></div>
@@ -69,7 +92,7 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
         <div class="clock-meta">NTP: <span id="ntpStatus">перевірка…</span> · Uptime: <span id="uptime">—</span></div>
         <div class="clock-meta">Остання відповідь ESP: <span id="lastResponse">—</span></div>
       </div>
-      <div id="connectionStatus" class="status"><span id="statusDot" class="dot"></span><div><div id="statusTitle" class="status-title">Перевірка стану…</div><div id="statusDetail" class="status-detail">GPIO10: —</div></div></div>
+      <div id="connectionStatus" class="status"><span id="statusDot" class="dot"></span><div><div id="statusTitle" class="status-title">Перевірка стану…</div></div></div>
       <div class="grid">
         <div class="metric"><div class="metric-label">Об'єкт</div><div class="metric-value" id="objectName">—</div></div>
         <div class="metric"><div class="metric-label">Wi-Fi мережа</div><div class="metric-value" id="wifiSsid">—</div></div>
@@ -77,7 +100,33 @@ static const char INDICATOR_PAGE_START[] = R"HTML(
         <div class="metric"><div class="metric-label">Рівень сигналу</div><div class="metric-value" id="wifiRssi">—</div></div>
         <div class="metric"><div class="metric-label">Остання подія</div><div class="metric-value" id="lastEvent">—</div></div>
       </div>
-      <p class="note">Статус оновлюється раз на секунду без перезавантаження сторінки.</p>
+      <section class="history-card">
+        <div class="history-head">
+          <strong>Історія електропостачання</strong>
+          <div class="history-nav">
+            <button id="historyPrev" type="button" aria-label="Попередній день">‹</button>
+            <span id="historyDate" class="history-date">—</span>
+            <button id="historyNext" type="button" aria-label="Наступний день">›</button>
+          </div>
+        </div>
+        <div class="timeline-scroll">
+          <div class="timeline">
+            <div class="hours"><span>00</span><span>01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span><span>07</span><span>08</span><span>09</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span><span>22</span><span>23</span></div>
+            <div class="timeline-row"><span class="timeline-label">00–24</span><div id="historySlots" class="slots"></div></div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><i style="background:#2b8a61"></i>Світло є</span>
+          <span><i style="background:#e5a23b"></i>Відключення</span>
+          <span><i style="background:#64748b"></i>Немає даних</span>
+        </div>
+        <div class="history-stats">
+          <div class="history-stat"><div class="history-stat-label">Світло було</div><div id="historyMains" class="history-stat-value">—</div></div>
+          <div class="history-stat"><div class="history-stat-label">Відсутнє</div><div id="historyOutage" class="history-stat-value">—</div></div>
+          <div class="history-stat"><div class="history-stat-label">Офлайн / невідомо</div><div id="historyUnknown" class="history-stat-value">—</div></div>
+        </div>
+        <div id="historyHint" class="history-help">Дані накопичуються після запуску моніторингу.</div>
+      </section>
 )HTML";
 
 static const char INDICATOR_PAGE_END[] = R"HTML(
@@ -115,7 +164,6 @@ async function updateStatus() {
     document.getElementById("ipAddress").textContent = d.ip || "—";
     document.getElementById("wifiRssi").textContent = d.rssi + " dBm · " + d.wifiQuality;
     document.getElementById("statusTitle").textContent = d.powerPresent ? "Мережа є" : "Немає мережі";
-    document.getElementById("statusDetail").textContent = "GPIO10: " + (d.rawHigh ? "HIGH" : "LOW") + " · підтверджений стан";
     document.getElementById("statusDot").style.background = d.powerPresent ? "var(--ok)" : "#ff7676";
     document.getElementById("connectionStatus").style.borderColor = d.powerPresent ? "#73d69a44" : "#ff767644";
     document.getElementById("connectionStatus").style.background = d.powerPresent ? "#73d69a0d" : "#ff76760d";
@@ -126,6 +174,53 @@ async function updateStatus() {
     document.getElementById("connection").textContent = "OFFLINE";
   }
 }
+let selectedHistoryDate = "";
+function fmtDuration(sec) {
+  sec = Math.max(0, Number(sec) || 0);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h + " год " + String(m).padStart(2, "0") + " хв";
+}
+function dateShift(dateText, delta) {
+  const d = new Date(dateText + "T12:00:00");
+  d.setDate(d.getDate() + delta);
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+async function updateHistory() {
+  try {
+    const r = await fetch("/api/history?date=" + selectedHistoryDate, {cache:"no-store"});
+    if (!r.ok) throw new Error("history");
+    const d = await r.json();
+    if (!d.valid) { document.getElementById("historyHint").textContent = "Очікування синхронізації годинника."; return; }
+    selectedHistoryDate = d.date;
+    document.getElementById("historyDate").textContent = d.date;
+    const slots = document.getElementById("historySlots");
+    slots.replaceChildren();
+    d.slots.forEach((s, i) => {
+      const el = document.createElement("div");
+      el.className = "slot";
+      const known = Number(s.m) + Number(s.o);
+      if (known > Number(s.u) && known > 0) {
+        el.classList.add(Number(s.o) > Number(s.m) ? "outage" : "power");
+      }
+      if (i % 4 === 0) el.classList.add("hour-start");
+      el.title = String(Math.floor(i/4)).padStart(2,"0") + ":" + (i%4*15).toString().padStart(2,"0") +
+        " · світло " + fmtDuration(s.m) + " · відключення " + fmtDuration(s.o) + " · невідомо " + fmtDuration(s.u);
+      slots.appendChild(el);
+    });
+    document.getElementById("historyMains").textContent = fmtDuration(d.mains);
+    document.getElementById("historyOutage").textContent = fmtDuration(d.outage);
+    document.getElementById("historyUnknown").textContent = fmtDuration(d.unknown);
+    document.getElementById("historyHint").textContent = "Блоки по 15 хвилин. Наведи курсор на блок, щоб побачити деталізацію.";
+    document.getElementById("historyPrev").disabled = dateShift(d.date, -1) < dateShift(d.date, -6);
+    document.getElementById("historyNext").disabled = d.date >= new Date().toISOString().slice(0,10);
+  } catch (e) {
+    document.getElementById("historyHint").textContent = "Не вдалося завантажити історію.";
+  }
+}
+document.getElementById("historyPrev").addEventListener("click", () => { selectedHistoryDate = dateShift(selectedHistoryDate, -1); updateHistory(); });
+document.getElementById("historyNext").addEventListener("click", () => { selectedHistoryDate = dateShift(selectedHistoryDate, 1); updateHistory(); });
+setInterval(updateHistory, 10000);
+updateHistory();
 setInterval(updateStatus, 1000);
 setInterval(updateLastResponse, 1000);
 updateStatus();
