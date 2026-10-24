@@ -3,8 +3,10 @@
 
 #include "config.h"
 #include "Settings.h"
+#include "Clock.h"
 #include "SetupPortal.h"
 #include "WebServer.h"
+
 
 SettingsManager settings;
 SetupPortalManager setupPortal;
@@ -149,9 +151,24 @@ void setup() {
   }
 
   startWorkingMode();
+
+  Clock::begin();
 }
 
 void loop() {
+
+  Clock::update();
+
+  static uint32_t lastClockPrint = 0;
+
+Clock::update();
+
+if (Clock::isTimeValid() &&
+    millis() - lastClockPrint >= 5000) {
+  lastClockPrint = millis();
+  Serial.println(Clock::dateTime());
+}
+
   if (mode == DeviceMode::SETUP) {
     setupPortal.update();
     updateLedBlink();
