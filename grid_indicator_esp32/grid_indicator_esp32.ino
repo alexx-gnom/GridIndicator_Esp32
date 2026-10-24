@@ -4,9 +4,11 @@
 #include "config.h"
 #include "Settings.h"
 #include "SetupPortal.h"
+#include "WebServer.h"
 
 SettingsManager settings;
 SetupPortalManager setupPortal;
+WebServerManager webServer;
 DeviceConfig config;
 
 enum class DeviceMode {
@@ -69,6 +71,7 @@ bool checkBootLongPress() {
 }
 
 void startSetupMode() {
+  webServer.stop();
   Serial.println();
   Serial.println("=== SETUP MODE ===");
 
@@ -174,6 +177,10 @@ void loop() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
+    if (!webServer.isRunning()) {
+      webServer.begin();
+    }
+    webServer.update(config.objectName);
     ledOff();
 
     if (wifiAttemptStarted) {
@@ -186,6 +193,7 @@ void loop() {
     return;
   }
 
+  // Якщо Wi-Fi тимчасово втрачено, сторінка стане доступною після відновлення.
   // LED світиться, поки Wi-Fi не підключений.
   ledOn();
 
